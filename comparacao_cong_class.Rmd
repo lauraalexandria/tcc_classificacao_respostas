@@ -1,0 +1,285 @@
+---
+title: "Comparando os resultados"
+author: "Laura Alexandria de Oliveira"
+date: "19/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, message = F, warning = F, fig.align = "center", fig.width = 11)
+
+library(tidyverse)
+library(tidymodels)
+library(patchwork)
+
+theme_set(theme_minimal())
+setwd("~/coisas de estudo/Faculdade/TCC/estudos_tcc/análises/Zé Gotinha")
+
+nivel_dificuldade <- readRDS("dados/nivel_dificuldade.rds") %>% 
+            mutate(pergunta_id = as.character(pergunta_id),
+                   `Nível de dificuldade` = factor(`Nível de dificuldade`, 
+                      levels = c("Fácil", "Médio", "Difícil"))) %>% 
+            rename(pergunta = pergunta_id)
+```
+
+```{r}
+acerto_perguntas <- data.frame(pergunta = numeric(),
+                               conglomerado = numeric(),
+                               classificador = numeric(),
+                               tipo_class = character(),
+                               tipo_bag = character())
+
+for (p in c(1:3, 5:21)){
+  
+  maior_acuracia <- 0
+  
+  for (mod in c("naive_bayes", "svm", "random_forest")){
+    
+    for (bag in c("_onehot", "_tf", "_tfidf", "_lsa")) {
+      modelo_teste <-
+        readRDS(paste0("supervisionado/modelos/", mod , bag, "_pergunta_", p, ".rds"))$modelo
+      acuracia <- collect_metrics(modelo_teste)[1, 3] %>% as.numeric()
+      
+      if (acuracia > maior_acuracia) {
+        maior_acuracia <- acuracia
+        modelo <- modelo_teste
+        tipo_bag <- bag
+        tipo_mod <- mod
+        
+      }
+      
+    }
+    
+  }
+  
+  conglomerado <-
+    readRDS(paste0("não supervisionado/conglomerados/conglomerado_pergunta", p, ".rds"))$perc_acerto_n
+  
+  acerto_perguntas <- rbind(acerto_perguntas,
+                            c(pergunta = p, 
+                              Conglomerado = conglomerado,
+                              Classificador = maior_acuracia,
+                              tipo_class = tipo_mod,
+                              tipo_bag = tipo_bag))
+
+}
+
+names(acerto_perguntas) <- c("pergunta", "Conglomerado", "Classificador",
+                             "tipo_class", "tipo_bag")
+
+acerto_perguntas <- acerto_perguntas %>% 
+  left_join(nivel_dificuldade) %>%
+  mutate(across(c("Conglomerado", "Classificador"), as.numeric)) %>%
+  mutate(pergunta = fct_reorder(as.factor(pergunta), Classificador, .desc = T)) 
+
+acerto_perguntas %>% 
+  ggplot(aes(x = pergunta, ymin = Conglomerado, ymax = Classificador)) + 
+  geom_errorbar(width = 0.2) +
+  geom_point(data = acerto_perguntas %>% 
+               pivot_longer(2:3, names_to = "tipo", values_to = "valor"),
+             aes(x = pergunta, y = valor, color = tipo, size = 2, shape = `Nível de dificuldade`), 
+             inherit.aes = FALSE) + 
+    labs(x = "Pergunta", y = "Proporção de Acerto")
+```
+
+```{r}
+class <- acerto_perguntas %>% 
+  group_by(tipo_class) %>% count() %>%
+  ggplot(aes(x = tipo_class, y = n)) + 
+  geom_col()
+
+bag <- acerto_perguntas %>% 
+  mutate(tipo_bag = str_replace(tipo_bag, "_", "")) %>% 
+  group_by(tipo_bag) %>% count() %>%
+  ggplot(aes(x = tipo_bag, y = n)) + 
+  geom_col()
+
+class + bag
+```
+
+
+# Desempenho entre os tipos de Bag
+
+```{r}
+acerto_perguntas_onehot <- data.frame(pergunta = numeric(),
+                                      conglomerado = numeric(),
+                                      classificador = numeric(),
+                                      tipo_class = character())
+
+for (p in c(1:3, 5:21)){
+  
+  maior_acuracia <- 0
+  bag <- "_onehot"
+  
+  for (mod in c("naive_bayes", "svm", "random_forest")){
+    
+      modelo_teste <-
+        readRDS(paste0("supervisionado/modelos/", mod , bag, "_pergunta_", p, ".rds"))$modelo
+      acuracia <- collect_metrics(modelo_teste)[1, 3] %>% as.numeric()
+      
+      if (acuracia > maior_acuracia) {
+        maior_acuracia <- acuracia
+        modelo <- modelo_teste
+        tipo_mod <- mod
+      
+    }
+    
+  }
+  
+  conglomerado <-
+    readRDS(paste0("não supervisionado/conglomerados/conglomerado_pergunta", p, ".rds"))$perc_acerto_n
+  
+  acerto_perguntas_onehot <- rbind(acerto_perguntas_onehot,
+                            c(pergunta = p, 
+                              conglomerado = conglomerado,
+                              classificador = maior_acuracia,
+                              tipo_class = tipo_mod))
+
+}
+
+names(acerto_perguntas_onehot) <- c("pergunta", "conglomerado", "classificador",
+                                    "tipo_class")
+
+# Captando para TF -------------------------------------------------------------
+
+acerto_perguntas_tf <- data.frame(pergunta = numeric(),
+                                      conglomerado = numeric(),
+                                      classificador = numeric(),
+                                      tipo_class = character())
+
+for (p in c(1:3, 5:21)){
+  
+  maior_acuracia <- 0
+  bag <- "_tf"
+  
+  for (mod in c("naive_bayes", "svm", "random_forest")){
+    
+      modelo_teste <-
+        readRDS(paste0("supervisionado/modelos/", mod , bag, "_pergunta_", p, ".rds"))$modelo
+      acuracia <- collect_metrics(modelo_teste)[1, 3] %>% as.numeric()
+      
+      if (acuracia > maior_acuracia) {
+        maior_acuracia <- acuracia
+        modelo <- modelo_teste
+        tipo_mod <- mod
+      
+    }
+    
+  }
+  
+  conglomerado <-
+    readRDS(paste0("não supervisionado/conglomerados/conglomerado_pergunta", p, ".rds"))$perc_acerto_n
+  
+  acerto_perguntas_tf <- rbind(acerto_perguntas_tf,
+                            c(pergunta = p, 
+                              conglomerado = conglomerado,
+                              classificador = maior_acuracia,
+                              tipo_class = tipo_mod))
+
+}
+
+names(acerto_perguntas_tf) <- c("pergunta", "conglomerado", "classificador",
+                                    "tipo_class")
+
+# Captando para TFIDF -----------------------------------------------------------
+
+acerto_perguntas_tfidf <- data.frame(pergunta = numeric(),
+                                      conglomerado = numeric(),
+                                      classificador = numeric(),
+                                      tipo_class = character())
+
+for (p in c(1:3, 5:21)){
+  
+  maior_acuracia <- 0
+  bag <- "_tfidf"
+  
+  for (mod in c("naive_bayes", "svm", "random_forest")){
+    
+      modelo_teste <-
+        readRDS(paste0("supervisionado/modelos/", mod , bag, "_pergunta_", p, ".rds"))$modelo
+      acuracia <- collect_metrics(modelo_teste)[1, 3] %>% as.numeric()
+      
+      if (acuracia > maior_acuracia) {
+        maior_acuracia <- acuracia
+        modelo <- modelo_teste
+        tipo_mod <- mod
+      
+    }
+    
+  }
+  
+  conglomerado <-
+    readRDS(paste0("não supervisionado/conglomerados/conglomerado_pergunta", p, ".rds"))$perc_acerto_n
+  
+  acerto_perguntas_tfidf <- rbind(acerto_perguntas_tfidf,
+                            c(pergunta = p, 
+                              conglomerado = conglomerado,
+                              classificador = maior_acuracia,
+                              tipo_class = tipo_mod))
+
+}
+
+names(acerto_perguntas_tfidf) <- c("pergunta", "conglomerado", "classificador",
+                                    "tipo_class")
+
+# Captando para LSA -------------------------------------------------------------
+
+acerto_perguntas_lsa <- data.frame(pergunta = numeric(),
+                                      conglomerado = numeric(),
+                                      classificador = numeric(),
+                                      tipo_class = character())
+
+for (p in c(1:3, 5:21)){
+  
+  maior_acuracia <- 0
+  bag <- "_lsa"
+  
+  for (mod in c("naive_bayes", "svm", "random_forest")){
+    
+      modelo_teste <-
+        readRDS(paste0("supervisionado/modelos/", mod , bag, "_pergunta_", p, ".rds"))$modelo
+      acuracia <- collect_metrics(modelo_teste)[1, 3] %>% as.numeric()
+      
+      if (acuracia > maior_acuracia) {
+        maior_acuracia <- acuracia
+        modelo <- modelo_teste
+        tipo_mod <- mod
+      
+    }
+    
+  }
+  
+  conglomerado <-
+    readRDS(paste0("não supervisionado/conglomerados/conglomerado_pergunta", p, ".rds"))$perc_acerto_n
+  
+  acerto_perguntas_lsa <- rbind(acerto_perguntas_lsa,
+                            c(pergunta = p, 
+                              conglomerado = conglomerado,
+                              classificador = maior_acuracia,
+                              tipo_class = tipo_mod))
+
+}
+
+names(acerto_perguntas_lsa) <- c("pergunta", "conglomerado", "classificador",
+                                    "tipo_class")
+
+onehot <- acerto_perguntas_onehot %>% 
+  group_by(tipo_class) %>% count() %>% 
+  ggplot(aes(x = tipo_class, y = n)) + 
+  geom_col() + labs(title = "One Hot")
+tf <- acerto_perguntas_tf %>% 
+  group_by(tipo_class) %>% count() %>% 
+  ggplot(aes(x = tipo_class, y = n)) + 
+  geom_col() + labs(title = "TF")
+tfidf <- acerto_perguntas_tfidf %>% 
+  group_by(tipo_class) %>% count() %>% 
+  ggplot(aes(x = tipo_class, y = n)) + 
+  geom_col() + labs(title = "TFIDF")
+lsa <- acerto_perguntas_lsa %>% 
+  group_by(tipo_class) %>% count() %>% 
+  ggplot(aes(x = tipo_class, y = n)) + 
+  geom_col() + labs(title = "LSA")
+
+(onehot + tf) / (tfidf + lsa)
+```
+

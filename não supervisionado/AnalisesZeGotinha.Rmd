@@ -1,0 +1,1332 @@
+---
+title: "Respostas do texto Zé Gotinha"
+author: "Laura Alexandria de Oliveira"
+date: "13/08/2021"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float:
+      collapsed: false
+---
+
+```{r setup, include=FALSE, warning = F, message = F}
+knitr::opts_chunk$set(echo = TRUE)
+library(word2vec)
+library(stringr)
+library(tidyverse)
+library(tidytext)
+library(readxl)
+library(factoextra)
+library(patchwork)
+library(knitr)
+library(kableExtra)
+
+theme_set(theme_minimal())
+
+# Leitura dos bancos de dados --------------------------------------------------
+
+cbow_s50 <- read.wordvectors("C:/Users/laura/OneDrive/Documentos/coisas de estudo/Faculdade/TCC/cbow_s50.txt", type = "txt")
+
+numbers2words <- function(x){
+    ## Function by John Fox found here: 
+    ## http://tolstoy.newcastle.edu.au/R/help/05/04/2715.html
+    ## Tweaks by AJH to add commas and "and"
+    helper <- function(x){
+      
+      digits <- rev(strsplit(as.character(x), "")[[1]])
+      nDigits <- length(digits)
+      if (nDigits == 1) as.vector(ones[digits])
+      else if (nDigits == 2)
+        if (x <= 19) as.vector(teens[digits[1]])
+      else trim(paste(tens[digits[2]],
+                      Recall(as.numeric(digits[1]))))
+      else if (nDigits == 3)
+        if (as.numeric(str_flatten(digits[c(2,1)])) <= 9)
+          trim(paste(centos[digits[3]],
+                     ones[digits[1]]))
+        else if (as.numeric(str_flatten(digits[c(2,1)])) <= 19) 
+          trim(paste(centos[digits[3]],
+                     teens[digits[1]]))
+        else trim(paste(centos[digits[3]],
+                  tens[digits[2]],
+                  Recall(as.numeric(digits[1]))))
+      else if (nDigits == 4) trim(paste(ones[digits[4]], "mil", 
+                                        Recall(makeNumber(digits[3:1]))))
+      else {
+        nSuffix <- ((nDigits + 2) %/% 3) - 1
+        if (nSuffix > length(suffixes)) stop(paste(x, "muito grande!"))
+        trim(paste(Recall(makeNumber(digits[
+          nDigits:(3*nSuffix + 1)])),
+          suffixes[nSuffix],"," ,
+          Recall(makeNumber(digits[(3*nSuffix):1]))))
+      }
+    }
+    trim <- function(text){
+      #Tidy leading/trailing whitespace, space before comma
+      text=gsub("^\ ", "", gsub("\ *$", "", gsub("\ ,",",",text)))
+      #Clear any trailing " and"
+      text=gsub(" and$","",text)
+      #Clear any trailing comma
+      gsub("\ *,$","",text)
+    }  
+    makeNumber <- function(...) as.numeric(paste(..., collapse=""))     
+    #Disable scientific notation
+    opts <- options(scipen=100) 
+    on.exit(options(opts)) 
+    ones <- c("", "um", "dois", "três", "quatro", "cinco", "seis", "sete",
+              "oito", "nove") 
+    names(ones) <- 0:9 
+    teens <- c("dez", "onze", "doze", "treze", "quatorze", "quinze",
+               "dezesseis", "dezessete", "dezoito", "dezenove")
+    names(teens) <- 0:9 
+    tens <- c("", "", "vinte", "trinta", "quarenta", "cinquenta", "sessenta", "setenta", "oitenta", "noventa") 
+    names(tens) <- 0:9 
+    centos <- c("cento","duzentos", "trezentos", "quatrocentos", "quinhentos", "seiscentos", "setecentos", "oitocentos", "novecentos")
+    names(centos) <- 1:9
+    x <- round(x)
+    suffixes <- c("mil", "milhão", "bilhão", "trilhão")     
+    if (length(x) > 1) return(trim(sapply(x, helper)))
+    helper(x)
+}
+
+transforma_num <- function(palavra){
+  
+  if(str_detect(palavra, "[a-zéèàá]")){return(palavra)}      
+     else{return(numbers2words(as.numeric(palavra)))}
+  
+}
+
+respostas <- read_xlsx("dados/Respostas_Zé_Gotinha 26.10.2021.xlsx")%>%
+  select(-10) %>% 
+  mutate(`Nível da rubrica` = str_sub(`Nível da rubrica`, end = 1),
+         `Nível da rubrica` = case_when(
+           `Nível da rubrica` == "4" ~ "3",
+           TRUE ~ `Nível da rubrica`))
+
+respostas_escolhidas <- read_xlsx("dados/Respostas_Zé_Gotinha - Escolhidas.xlsx") %>%
+  select(-10) %>% 
+  mutate(`Nível da rubrica` = as.character(`Nível da rubrica`),
+         `Nível da rubrica` = case_when(
+           `Nível da rubrica` == "4" ~ "3",
+           TRUE ~ `Nível da rubrica`))
+
+# Tá faltando: Nível 1 e 3 da pergunta 3, Nível 1 da Pergunta 5, Nível 1 da Pergunta 6,
+# Nível 3 da pergunta 7, Nível 1 e 2 da pergunta 9, Nível 1 e 2 da pergunta 11, 
+# Nível 3 da pergunta 14, Nível 3 da pergunta 15, Nível 2 e 3 da pergunta 17
+
+
+# exemplos <- read_xlsx("Zé Gotinha (respostas).xlsx") %>%
+#   mutate(id = 1:n()) %>%
+#   pivot_longer(cols = 3:19, names_to = "Pergunta", values_to = "Resposta") %>% 
+#   mutate(Pergunta = str_replace_all(Pergunta, "[.]", " ")) 
+```
+
+# Bancos de Dados
+
+As respostas dadas pelas crianças:
+
+```{r echo=FALSE}
+kable(respostas %>% select(-1)) %>% 
+  kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  row_spec(0, background = "#778bd9", color = "white") %>% 
+  scroll_box(width = "100%", height = "400px")
+```
+
+\
+
+Respostas qu estavam com NA:
+
+```{r echo=FALSE}
+kable(respostas %>% filter(id == "SMED") %>% select(-2)) %>%  
+  kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  row_spec(0, background = "#778bd9", color = "white") %>% 
+  scroll_box(width = "100%", height = "400px")
+
+respostas <- respostas %>% filter(id != "SMED")
+respostas_escolhidas <- respostas_escolhidas %>% filter(id != "SMED")
+```
+
+<!-- As respostas dadas pelos estagiários: -->
+
+<!-- ```{r echo=FALSE} -->
+<!-- kable(exemplos %>% select(-c(1,2))) %>%  -->
+<!--   kable_styling(bootstrap_options = c("striped", "hover")) %>% -->
+<!--   row_spec(0, background = "#778bd9", color = "white") %>%  -->
+<!--   scroll_box(width = "100%", height = "400px") -->
+<!-- ``` -->
+
+\
+
+O vocabulário que possui as coordenadas de cada uma das palavras foi retirado de http://nilc.icmc.usp.br/nilc/index.php/repositorio-de-word-embeddings-do-nilc. A versão utilizada consta 46.480.300 palavras e 50 dimensões para cada uma das palavras.
+
+```{r echo=FALSE}
+kable(cbow_s50[7:20, 1:20]) %>% 
+  kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  scroll_box(width = "100%", height = "400px")
+```
+
+\
+
+**Algumas considerações:**
+
+1. Todas as palavras possuem letras minúsculas;
+
+2. O vocabulário possui diferentes formas conjugadas de verbos mais comuns, consideram pessoas e tempos diferentes, por exemplo:
+
+- **Ser:** "sou", "és", "é", "somos", "sois","são", "era", "eras","era", "éramos", "éreis","eram", "serei", "serás", "será", "seremos", "sereis", "serão", "seria", "fosse"...
+
+- **Dançar:** "danço", "danças", "dança", "dançamos", ~~"dançais"~~,"dançam", "dancei", "dançaste", "dançou", "dançamos", ~~"dançastes"~~, "dançaram", "dançarei", "dançarás","dançará", "dançaremos", ~~"dançareis"~~, "dançarão"...
+
+3. Distinção entre palavras no singular e no plural: carro/carros, flor/flores, cão/cães.
+
+4. Entre as palavras presentes no vocabulário existem alguns números por extenso. Pude conferir: 
+
+- "zero", "um", "dois", "três", "quatro", "cinco", "seis", "sete", "oito", "nove", "dez", "onze", "doze", "treze","quatorze", "quinze", "dezesseis", "dezessete", "dezoito", "dezenove", "vinte", "trinta", "quarenta", "cinquenta", "sessenta", "setenta", "oitenta", "noventa", "cem", "cento","duzentos", "trezentos", "quatrocentos", "quinhentos", "seiscentos", "setecentos", "oitocentos", "novecentos", "mil", "milhão", "milhões", "bilhão", "bilhões". 
+
+5. Alguns nomes próprios mais comuns - nomes de pessoas, apelidos, sobrenomes, cidades em português: "maria", "zé", "josé", "malu", "carlinhos","juatuba", "oliveira", ~~"fiorindo"~~... 
+
+6. Abreviações comuns como min e hr??
+
+# Escolhendo respostas ouro
+
+```{r echo=FALSE}
+respostas %>% 
+  group_by(pergunta_id, Pergunta,`Nível da rubrica`) %>% 
+  count() %>% filter(n <= 4) %>% 
+  kable() %>% kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  row_spec(0, background = "#778bd9", color = "white") 
+```
+
+```{r warning = F, message = F}
+perguntas_fora <- respostas %>% 
+  group_by(pergunta_id, Pergunta,`Nível da rubrica`) %>% 
+  count() %>% filter(n <= 4) %>% mutate(perg_nivel = paste(pergunta_id, `Nível da rubrica`)) %>% pull(perg_nivel)
+
+set.seed(25)
+respostas_ouro <- respostas_escolhidas %>% 
+  mutate(perg_nivel = paste(pergunta_id, `Nível da rubrica`)) %>%
+  filter(!perg_nivel %in% perguntas_fora) %>% 
+  select(-perg_nivel) # %>% 
+  # group_by(pergunta_id, `Nível da rubrica`) %>% 
+  # sample_n(size = 3, replace = F) %>% 
+  # ungroup()
+
+respostas_teste <- respostas %>% 
+  #filter(!pergunta_id %in% perguntas_fora) %>%
+  anti_join(respostas_ouro)
+```
+
+
+# Projeção
+
+Para projetar as palavras no espeço vetorial alguns procedimentos foram realizados:
+
+1. Passar todas as letras para minúsculo;
+1. Retirada de pontuações;
+1. As palavras foram separadas de acordo com os espaços em branco;
+1. Trocar os números por extenso;
+
+Outros tratamentos que podem ser realizados:
+
+- Remoção das stopwords;
+- Palavras compostas que não devem ser tratadas separadamente;
+- Nomes próprios;
+
+Cada palavra recebeu um vetor com 50 coordenadas, para unificar a resposta calculou-se a média dos valores de cada coordenda.
+
+```{r}
+projecao_resposta <- function(banco_respostas, vocabulario){ # Banco no formato longer
+  
+  banco_respostas <- banco_respostas %>% 
+    mutate(Resposta = tolower(Resposta) %>% # Todas as letras em minúsculo
+             str_replace_all("[.,!?:;/]", " ")) %>%  # Remove pontuação
+    unnest_tokens(word, Resposta) %>% # Dividir as palavras pelos espaços
+    drop_na() %>% 
+    mutate(word = map(word, transforma_num) %>% unlist()) %>% # Transformar números por extenso
+    separate_rows(word, sep = " ") # números por extenso por linha
+  
+  # Palavras utilizadas nas respostas e presentes no vocabulário inicial
+  vocabulario_respostas <- banco_respostas %>% pull(word) %>% unique()
+  proporcao <- sum(vocabulario_respostas %in% rownames(vocabulario))/vocabulario_respostas %>% length()
+  cat(paste0(round(proporcao, 2)*100, "% das palavras utilizadas nas respostas estão presentes no vocabulário."))
+  
+  # selecionando as palavras de interesse e coordenadas
+  banco_respostas <- banco_respostas %>% filter(word %in% rownames(vocabulario))
+  vocabulario <- vocabulario[banco_respostas %>% pull(word),]
+    
+  # Junção das coordenadas e cálculo da média
+  banco_respostas <- cbind(banco_respostas, vocabulario) %>% 
+    group_by(estudante_id, pergunta_id, `Nível da rubrica`) %>% 
+    summarise(across("1":"50", mean)) %>%  
+    ungroup()
+  
+  names(banco_respostas)[4:53] <- paste0("V", names(banco_respostas)[4:53])
+  
+  return(banco_respostas)
+  
+}
+```
+
+```{r warning=F, message=F, results='asis'}
+centroides <- projecao_resposta(respostas_ouro, cbow_s50) %>%
+  arrange(pergunta_id, `Nível da rubrica`)
+  # group_by(pergunta_id, `Nível da rubrica`) %>% 
+  # summarise(across("V1":"V50", mean)) %>%  
+  # ungroup()
+alunos <- projecao_resposta(respostas_teste, cbow_s50)
+```
+
+
+# Análise de Conglomerado
+
+<!-- - Posso olhar ainda o "condensamento" dos clusters; -->
+<!-- - Métrica de acerto da classificação; -->
+<!-- - De novo mostrar sobre as distâncias? -->
+<!-- - Posso colocar imagenzinha das rúbricas também; -->
+
+```{r warning = F}
+conglomerado_pergunta <- function(pergunta, resp_ouro, resp_teste){
+
+  todas_obs <- rbind(resp_ouro %>% filter(pergunta_id == pergunta),
+                     resp_teste %>% filter(pergunta_id == pergunta))
+  n_ouro <- nrow(resp_ouro %>% filter(pergunta_id == pergunta))
+  n_teste <- nrow(resp_teste %>% select(-1) %>% filter(pergunta_id == pergunta))
+  classes_disponiveis <- resp_ouro %>% filter(pergunta_id == pergunta) %>% pull(`Nível da rubrica`)
+  
+  class <- get_dist(todas_obs[,4:53]) %>% as.matrix %>%
+    .[(n_ouro+1):(n_teste+n_ouro), 1:n_ouro] %>% as.data.frame() %>% 
+    rename_with(~ paste0("V", .)) %>% 
+    mutate(id = resp_teste %>% filter(pergunta_id == pergunta) %>% pull(estudante_id)) %>% 
+    pivot_longer(cols = starts_with("V"), names_to = "Centroide", 
+                 values_to = "Valores") %>% 
+    group_by(id) %>% 
+    filter(Valores == min(Valores)) %>% 
+    mutate(Centroide = str_replace(Centroide, "V", "") %>% as.numeric,
+           predito = classes_disponiveis[Centroide],
+           id_mais_proxima = resp_ouro %>% filter(pergunta_id == pergunta) %>% .[Centroide, 1] %>% pull(estudante_id)) %>% 
+    rename(estudante_id = id)
+  
+  banco <- resp_teste %>% filter(pergunta_id == pergunta) %>% 
+    left_join(class %>% select(estudante_id, predito, id_mais_proxima))
+  
+  barras <- banco %>% 
+    ggplot(aes(predito, fill = predito)) + 
+    geom_bar() + labs(y = "") + theme_minimal() +
+    theme(legend.position = "none")
+  
+  matriz <- banco %>% 
+    group_by(predito, `Nível da rubrica`) %>% 
+    count() %>% 
+    group_by(`Nível da rubrica`) %>% 
+    mutate("Proporção" = round(n/sum(n), 3)) %>% 
+    ggplot(aes(x = predito, y =`Nível da rubrica`, fill = `Proporção`)) +
+    geom_tile() + 
+    geom_text(aes(label = `Proporção`)) + 
+    labs(x = "Classe Predita") + 
+    scale_fill_gradient2(low = "#ffffff", high = "#2d068a")
+  
+  perc_acerto_n <- banco %>%
+    mutate(acerto = (predito == `Nível da rubrica`)) %>% 
+    pull(acerto) %>% sum()/n_teste
+  perc_acerto <- paste("A proporção de acerto é igual a", round(perc_acerto_n, 2)*100,"%.")
+  
+  list(barras = barras,
+       matriz = matriz,
+       perc_acerto = perc_acerto,
+       perc_acerto_n  = perc_acerto_n,
+       banco = banco)
+  
+}
+
+probabilidades_cluster <- function(pergunta, resp_ouro, resp_teste){
+  
+  todas_obs <- rbind(resp_ouro %>% filter(pergunta_id == pergunta),
+                     resp_teste %>% filter(pergunta_id == pergunta))
+  n_ouro <- nrow(resp_ouro %>% filter(pergunta_id == pergunta))
+  n_teste <- nrow(resp_teste %>% filter(pergunta_id == pergunta))
+  n_classes <- resp_ouro %>% filter(pergunta_id == pergunta) %>% pull(`Nível da rubrica`) %>% unique() %>% length()
+  classes_corretas <- resp_teste %>% filter(pergunta_id == pergunta) %>% pull(`Nível da rubrica`) %>% as.numeric() %>% rep(each = n_classes) %>% paste0("V",.)
+  classes_disponiveis <- resp_ouro %>% filter(pergunta_id == pergunta) %>% pull(`Nível da rubrica`) %>%  paste0("V",.)
+  
+  distancias <- get_dist(todas_obs[,4:53]) %>% as.matrix %>%
+    .[(n_ouro+1):(n_teste+n_ouro), 1:n_ouro] %>% as.data.frame() %>% 
+    rename_with(~ paste0("V", .)) %>% 
+    rename_with(~ str_replace(., "[.]", "1"), starts_with("V.")) %>% 
+    mutate(id = resp_teste %>% filter(pergunta_id == pergunta) %>% 
+             pull(estudante_id)) %>% 
+    pivot_longer(cols = starts_with("V"), names_to = "Centroide_", values_to = "Distâncias_") %>% 
+    mutate(`Centroide_` = classes_disponiveis[as.numeric(str_sub(`Centroide_`, 2))],
+           # `Distâncias_` = 1/`Distâncias_`
+           ) %>% 
+    group_by(id, Centroide_) %>% 
+    filter(`Distâncias_` == min(`Distâncias_`)) # será que é máximo mesmo?
+  
+  probabilidades <- distancias %>% 
+    mutate( `Distâncias_` = 1/`Distâncias_`) %>% 
+    group_by(id) %>% 
+    mutate("Prob_" = `Distâncias_`/sum(`Distâncias_`),
+           "Prob_" = ifelse(is.na(`Prob_`), 1, `Prob_`)) %>% # Se distância = 0
+    filter(`Prob_` == max(`Prob_`)) %>% 
+    rename_with(~ paste0(., "predito"), ends_with("_"))
+  
+  probabilidades_acerto <- distancias %>% 
+    mutate( `Distâncias_` = 1/`Distâncias_`) %>% 
+    group_by(id) %>% 
+    mutate("Prob_" = `Distâncias_`/sum(`Distâncias_`),
+           "Prob_" = ifelse(is.na(`Prob_`), 1, `Prob_`)) %>% 
+    ungroup() %>% 
+    distinct(id, `Centroide_`, .keep_all = T) %>%      # Mesma distância do ponto entre respostas ouro no mesmo nível;
+    mutate("Centroide_acerto" = classes_corretas) %>% 
+    filter(`Centroide_` == Centroide_acerto) %>% 
+    select(-`Centroide_`) %>% 
+    rename_with(~ paste0(., "acerto"), ends_with("_")) %>% 
+    mutate(Prob_erro = 1 - Prob_acerto)
+  
+  probabilidades <- probabilidades %>% 
+    left_join(probabilidades_acerto) %>% 
+    mutate(Comp = ifelse(Centroide_predito == Centroide_acerto, "Acerto", "Erro"))
+  
+  return(probabilidades)
+  
+}
+
+```
+
+## Pergunta 1
+
+```{r echo=FALSE, fig.width=12, message=FALSE, warning=FALSE}
+p1 <- conglomerado_pergunta(1, centroides, alunos)
+ultima_col1 <- p1$banco %>% group_by(predito) %>% count() %>% rename(Predito = n)
+
+respostas %>% filter(pergunta_id == 1) %>% 
+  group_by(Pergunta,`Nível da rubrica`) %>% 
+  count() %>% 
+  left_join(ultima_col1 %>% mutate(predito = as.character(predito)), 
+            by = c("Nível da rubrica" = "predito")) %>% 
+  kable() %>% kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  collapse_rows(columns = 1, valign = "top") %>% 
+  row_spec(0, background = "#778bd9", color = "white") 
+```
+
+```{r warning=F, message = F, fig.width=12, results='asis'}
+p1$perc_acerto
+```
+
+```{r warning=F, message = F, fig.width=12, results='asis'}
+p1$barras + p1$matriz 
+```
+
+Probabilidades da resposta pertencer a categoria predita nos casos em que houve acerto.
+
+```{r warning=F, message = F, fig.width=12}
+probabilidades_cluster(1, centroides, alunos) %>% 
+  ggplot(aes(x = Prob_predito, y = ..count../sum(..count..), fill = Comp)) + 
+  geom_histogram(color = "white") + 
+  facet_wrap(vars(Comp), nrow = 2) +
+  xlim(0, 1.1) +
+  labs(y = "") + theme(legend.position = "none")
+```
+
+## Pergunta 2
+
+```{r echo=FALSE, fig.width=12, message=FALSE, warning=FALSE}
+p2 <- conglomerado_pergunta(2, centroides, alunos %>% filter(`Nível da rubrica` != 1))
+ultima_col2 <- p2$banco %>% group_by(predito) %>% count() %>% rename(Predito = n)
+
+respostas %>% filter(pergunta_id == 2) %>% 
+  group_by(Pergunta,`Nível da rubrica`) %>% 
+  count() %>% 
+  left_join(ultima_col2 %>% mutate(predito = as.character(predito)), 
+            by = c("Nível da rubrica" = "predito")) %>% 
+  kable() %>% kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  collapse_rows(columns = 1, valign = "top") %>% 
+  row_spec(0, background = "#778bd9", color = "white") 
+```
+
+```{r fig.width=12, message=FALSE, warning=FALSE, results='asis'}
+p2$perc_acerto
+p2$barras + p2$matriz 
+```
+
+Probabilidades da resposta pertencer a categoria predita nos casos em que houve acerto.
+
+```{r warning=F, message = F, fig.width=12}
+probabilidades_cluster(2, centroides,
+                     alunos %>% filter(`Nível da rubrica` != 1)) %>% 
+  ggplot(aes(x = Prob_predito, y = ..count../sum(..count..), fill = Comp)) + 
+  geom_histogram(color = "white") + 
+  facet_wrap(vars(Comp), nrow = 2) +
+  xlim(0, 1.1) +
+  labs(y = "") + theme(legend.position = "none")
+```
+
+## Pergunta 3
+
+```{r echo=FALSE, fig.width=12, message=FALSE, warning=FALSE}
+p3 <- conglomerado_pergunta(3, centroides, alunos)
+ultima_col3 <- p3$banco %>% group_by(predito) %>% count() %>% rename(Predito = n)
+
+respostas %>% filter(pergunta_id == 3) %>% 
+  group_by(Pergunta,`Nível da rubrica`) %>% 
+  count() %>% 
+  left_join(ultima_col3 %>% mutate(predito = as.character(predito)), 
+            by = c("Nível da rubrica" = "predito")) %>% 
+  kable() %>% kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  collapse_rows(columns = 1, valign = "top") %>%
+  row_spec(0, background = "#778bd9", color = "white") 
+```
+
+```{r fig.width=12, message=FALSE, warning=FALSE, results='asis'}
+p3$perc_acerto
+p3$barras + p3$matriz 
+```
+
+Probabilidades da resposta pertencer a categoria predita nos casos em que houve acerto.
+
+```{r warning=F, message = F, fig.width=12}
+probabilidades_cluster(3, centroides, alunos) %>% 
+  ggplot(aes(x = Prob_predito, y = ..count../sum(..count..), fill = Comp)) + 
+  geom_histogram(color = "white") + 
+  facet_wrap(vars(Comp), nrow = 2) +
+  xlim(0, 1.1) +
+  labs(y = "") + theme(legend.position = "none")
+```
+
+## Pergunta 4
+
+```{r echo=FALSE, fig.width=12, message=FALSE, warning=FALSE}
+p4 <- conglomerado_pergunta(4, centroides, alunos %>% filter(`Nível da rubrica` != 1))
+ultima_col4 <- p4$banco %>% group_by(predito) %>% count() %>% rename(Predito = n)
+
+respostas %>% filter(pergunta_id == 4) %>% 
+  group_by(Pergunta,`Nível da rubrica`) %>% 
+  count() %>% 
+  left_join(ultima_col4 %>% mutate(predito = as.character(predito)), 
+            by = c("Nível da rubrica" = "predito")) %>% 
+  kable() %>% kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  collapse_rows(columns = 1, valign = "top") %>%
+  row_spec(0, background = "#778bd9", color = "white") 
+```
+
+```{r fig.width=12, message=FALSE, warning=FALSE, results='asis'}
+p4$perc_acerto
+p4$barras + p4$matriz 
+```
+
+Probabilidades da resposta pertencer a categoria predita nos casos em que houve acerto.
+
+```{r warning=F, message = F, fig.width=12}
+probabilidades_cluster(4, centroides, alunos) %>% 
+  ggplot(aes(x = Prob_predito, y = ..count../sum(..count..), fill = Comp)) + 
+  geom_histogram(color = "white") + 
+  facet_wrap(vars(Comp), nrow = 2) +
+  xlim(0, 1.1) +
+  labs(y = "") + theme(legend.position = "none")
+```
+
+
+## Pergunta 5
+
+```{r fig.width=12, message=FALSE, warning=FALSE, results='asis'}
+p5 <- conglomerado_pergunta(5, centroides, alunos)
+
+# todas_obs5 <- rbind(centroides %>% filter(pergunta_id == 5),
+#                     alunos %>% select(-1) %>% filter(pergunta_id == 5))
+# n_ouro5 <- nrow(centroides %>% filter(pergunta_id == 5))
+# n_teste5 <- nrow(alunos %>% select(-1) %>% filter(pergunta_id == 5))
+# 
+# class5 <- get_dist(todas_obs5[,3:52]) %>% as.matrix %>%
+#   .[(n_ouro5+1):(n_teste5+n_ouro5), 1:n_ouro5] %>% as.data.frame() %>% 
+#   rename_with(~ paste0("V", .)) %>% 
+#   mutate(id = alunos %>% filter(pergunta_id == 5) %>% pull(estudante_id)) %>% 
+#   pivot_longer(cols = starts_with("V"), names_to = "Centroide", 
+#                values_to = "Valores") %>% 
+#   group_by(id) %>% 
+#   filter(Valores == min(Valores)) %>% 
+#   mutate(predito = str_replace(Centroide, "V", "")) %>% 
+#   rename(estudante_id = id)
+# 
+# banco5 <- alunos %>% filter(pergunta_id == 5) %>% 
+#   left_join(class5 %>% select(estudante_id, predito))
+# 
+# barras5 <- banco5 %>% 
+#   ggplot(aes(predito, fill = predito)) + 
+#   geom_bar() + labs(y = "") + theme_minimal() +
+#   theme(legend.position = "none")
+# 
+# matriz5 <- banco5 %>% 
+#   group_by(predito, `Nível da rubrica`) %>% 
+#   count() %>% 
+#   group_by(`Nível da rubrica`) %>% 
+#   mutate("Proporção" = n/sum(n)) %>% 
+#   ggplot(aes(x = predito, y =`Nível da rubrica`, fill = `Proporção`)) +
+#   geom_tile() +
+#   scale_fill_gradient2(low = "#00AFBB", high = "#FC4E05")
+# 
+# perc_acerto5_n <- banco5 %>%
+#   mutate(acerto = (predito == `Nível da rubrica`)) %>% 
+#   pull(acerto) %>% sum()/n_teste5
+# perc_acerto5 <- paste("A proporção de acerto é igual a", round(perc_acerto5_n, 2)*100,"%.")
+# 
+# p5 <- list(barras = barras5,
+#            matriz = matriz5,
+#            perc_acerto = perc_acerto5,
+#            perc_acerto_n  = perc_acerto5_n,
+#            banco = banco5)
+```
+
+```{r echo=FALSE, fig.width=12, message=FALSE, warning=FALSE}
+ultima_col5 <- p5$banco %>% group_by(predito) %>% count() %>% rename(Predito = n)
+
+respostas %>% filter(pergunta_id == 5) %>% 
+  group_by(Pergunta,`Nível da rubrica`) %>% 
+  count() %>% 
+ left_join(ultima_col5 %>% mutate(predito = as.character(predito)), 
+            by = c("Nível da rubrica" = "predito")) %>% 
+  kable() %>% kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  collapse_rows(columns = 1, valign = "top") %>%
+  row_spec(0, background = "#778bd9", color = "white")
+```
+
+```{r fig.width=12, message=FALSE, warning=FALSE, results='asis'}
+p5$perc_acerto
+p5$barras + p5$matriz
+```
+
+
+Probabilidades da resposta pertencer a categoria predita nos casos em que houve acerto.
+
+```{r warning=F, message = F, fig.width=12}
+probabilidades_cluster(5, centroides, alunos) %>% 
+  ggplot(aes(x = Prob_predito, y = ..count../sum(..count..), fill = Comp)) + 
+  geom_histogram(color = "white") + 
+  facet_wrap(vars(Comp), nrow = 2) +
+  xlim(0, 1.1) +
+  labs(y = "") + theme(legend.position = "none")
+```
+
+## Pergunta 6 
+
+```{r echo=FALSE, fig.width=12, message=FALSE, warning=FALSE}
+p6 <- conglomerado_pergunta(6, centroides, alunos %>% filter(`Nível da rubrica` != 2))
+ultima_col6 <- p6$banco %>% group_by(predito) %>% count() %>% rename(Predito = n)
+
+respostas %>% filter(pergunta_id == 6) %>% 
+  group_by(Pergunta,`Nível da rubrica`) %>% 
+  count() %>% 
+  left_join(ultima_col6 %>% mutate(predito = as.character(predito)), 
+            by = c("Nível da rubrica" = "predito")) %>% 
+  kable() %>% kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  collapse_rows(columns = 1, valign = "top") %>%
+  row_spec(0, background = "#778bd9", color = "white")
+```
+
+```{r fig.width=12, message=FALSE, warning=FALSE, results='asis'}
+p6$perc_acerto
+p6$barras + p6$matriz 
+```
+
+Probabilidades da resposta pertencer a categoria predita nos casos em que houve acerto.
+
+```{r warning=F, message = F, fig.width=12}
+probabilidades_cluster(6, centroides, alunos %>% filter(`Nível da rubrica` != 2)) %>% 
+  ggplot(aes(x = Prob_predito, y = ..count../sum(..count..), fill = Comp)) + 
+  geom_histogram(color = "white") + 
+  facet_wrap(vars(Comp), nrow = 2) +
+  xlim(0, 1.1) +
+  labs(y = "") + theme(legend.position = "none")
+```
+
+## Pergunta 7
+
+```{r fig.width=12, message=FALSE, warning=FALSE}
+p7 <- conglomerado_pergunta(7, centroides, alunos)
+
+# todas_obs7 <- rbind(centroides %>% filter(pergunta_id == 7),
+#                     alunos %>% select(-1) %>% filter(pergunta_id == 7))
+# n_ouro7 <- nrow(centroides %>% filter(pergunta_id == 7))
+# n_teste7 <- nrow(alunos %>% select(-1) %>% filter(pergunta_id == 7))
+#   
+# class7 <-   get_dist(todas_obs7[,3:52]) %>% as.matrix %>%
+#   .[(n_ouro7+1):(n_teste7+n_ouro7), 1:n_ouro7] %>% as.data.frame() %>% 
+#   rename_with(~ paste0("V", .)) %>% 
+#   mutate(id = alunos %>% filter(pergunta_id == 7) %>% pull(estudante_id)) %>% 
+#   pivot_longer(cols = starts_with("V"), names_to = "Centroide", 
+#                values_to = "Valores") %>% 
+#   group_by(id) %>% 
+#   filter(Valores == min(Valores)) %>% 
+#   mutate(predito = str_replace(Centroide, "V", "")) %>% 
+#   rename(estudante_id = id)
+# 
+# banco7 <- alunos %>% filter(pergunta_id == 7) %>% 
+#   left_join(class7 %>% select(estudante_id, predito))
+# 
+# barras7 <- banco7 %>% 
+#   ggplot(aes(predito, fill = predito)) + 
+#   geom_bar() + labs(y = "") + theme_minimal() +
+#   theme(legend.position = "none")
+# 
+# matriz7 <- banco7 %>% 
+#   group_by(predito, `Nível da rubrica`) %>% 
+#   count() %>% 
+#   group_by(`Nível da rubrica`) %>% 
+#   mutate("Proporção" = n/sum(n)) %>% 
+#   ggplot(aes(x = predito, y =`Nível da rubrica`, fill = `Proporção`)) +
+#   geom_tile() +
+#   scale_fill_gradient2(low = "#00AFBB", high = "#FC4E07")
+# 
+# perc_acerto7_n <- banco7 %>%
+#   mutate(acerto = (predito == `Nível da rubrica`)) %>% 
+#   pull(acerto) %>% sum()/n_teste7
+# perc_acerto7 <- paste("A proporção de acerto é igual a", round(perc_acerto7_n, 2)*100,"%.")
+# 
+# p7 <- list(barras = barras7,
+#            matriz = matriz7,
+#            perc_acerto = perc_acerto7,
+#            perc_acerto_n = perc_acerto7_n,
+#            banco = banco7)
+```
+
+```{r echo=FALSE, fig.width=12, message=FALSE, warning=FALSE}
+ultima_col7 <- p7$banco %>% group_by(predito) %>% count() %>% rename(Predito = n)
+
+respostas %>% filter(pergunta_id == 7) %>% 
+  group_by(Pergunta,`Nível da rubrica`) %>% 
+  count() %>% 
+  left_join(ultima_col7 %>% mutate(predito = as.character(predito)), 
+            by = c("Nível da rubrica" = "predito")) %>% 
+  kable() %>% kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  collapse_rows(columns = 1, valign = "top") %>%
+  row_spec(0, background = "#778bd9", color = "white")
+```
+
+
+```{r fig.width=12, message=FALSE, warning=FALSE, results='asis'}
+p7$perc_acerto
+p7$barras + p7$matriz
+```
+
+Probabilidades da resposta pertencer a categoria predita nos casos em que houve acerto.
+
+```{r warning=F, message = F, fig.width=12}
+probabilidades_cluster(7, centroides, alunos) %>% 
+  ggplot(aes(x = Prob_predito, y = ..count../sum(..count..), fill = Comp)) + 
+  geom_histogram(color = "white") + 
+  facet_wrap(vars(Comp), nrow = 2) +
+  xlim(0, 1.1) +
+  labs(y = "") + theme(legend.position = "none")
+```
+
+## Pergunta 8
+
+```{r echo=FALSE, fig.width=12, message=FALSE, warning=FALSE}
+p8 <- conglomerado_pergunta(8, centroides, alunos)
+ultima_col8 <- p8$banco %>% group_by(predito) %>% count() %>% rename(Predito = n)
+
+respostas %>% filter(pergunta_id == 8) %>% 
+  group_by(Pergunta,`Nível da rubrica`) %>% 
+  count() %>% 
+  left_join(ultima_col8 %>% mutate(predito = as.character(predito)), 
+            by = c("Nível da rubrica" = "predito")) %>% 
+  kable() %>% kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  collapse_rows(columns = 1, valign = "top") %>%
+  row_spec(0, background = "#778bd9", color = "white")
+```
+
+```{r fig.width=12, message=FALSE, warning=FALSE, results='asis'}
+p8$perc_acerto
+p8$barras + p8$matriz 
+```
+
+Probabilidades da resposta pertencer a categoria predita nos casos em que houve acerto.
+
+```{r warning=F, message = F, fig.width=12}
+probabilidades_cluster(8, centroides, alunos) %>% 
+  ggplot(aes(x = Prob_predito, y = ..count../sum(..count..), fill = Comp)) + 
+  geom_histogram(color = "white") + 
+  facet_wrap(vars(Comp), nrow = 2) +
+  xlim(0, 1.1) +
+  labs(y = "") + theme(legend.position = "none")
+```
+
+## Pergunta 9
+
+```{r echo=FALSE, fig.width=12, message=FALSE, warning=FALSE}
+p9 <- conglomerado_pergunta(9, centroides, alunos %>% filter(`Nível da rubrica` != 2))
+ultima_col9 <- p9$banco %>% group_by(predito) %>% count() %>% rename(Predito = n)
+
+respostas %>% filter(pergunta_id == 9) %>% 
+  group_by(Pergunta,`Nível da rubrica`) %>% 
+  count() %>% 
+  left_join(ultima_col9 %>% mutate(predito = as.character(predito)), 
+            by = c("Nível da rubrica" = "predito")) %>% 
+  kable() %>% kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  collapse_rows(columns = 1, valign = "top") %>%
+  row_spec(0, background = "#778bd9", color = "white")
+```
+
+```{r fig.width=12, message=FALSE, warning=FALSE, results='asis'}
+p9$perc_acerto
+p9$barras + p9$matriz 
+```
+
+Probabilidades da resposta pertencer a categoria predita nos casos em que houve acerto.
+
+```{r warning=F, message = F, fig.width=12}
+probabilidades_cluster(9, centroides,
+                       alunos %>% filter(`Nível da rubrica` != 2)) %>% 
+  ggplot(aes(x = Prob_predito, y = ..count../sum(..count..), fill = Comp)) + 
+  geom_histogram(color = "white") + 
+  facet_wrap(vars(Comp), nrow = 2) +
+  xlim(0, 1.1) +
+  labs(y = "") + theme(legend.position = "none")
+```
+
+## Pergunta 10
+
+```{r echo=FALSE, fig.width=12, message=FALSE, warning=FALSE, results='asis'}
+p10 <- conglomerado_pergunta(10, centroides, alunos)
+ultima_col10 <- p10$banco %>% group_by(predito) %>% count() %>% rename(Predito = n)
+
+respostas %>% filter(pergunta_id == 10) %>% 
+  group_by(Pergunta,`Nível da rubrica`) %>% 
+  count() %>% 
+  left_join(ultima_col10 %>% mutate(predito = as.character(predito)), 
+            by = c("Nível da rubrica" = "predito")) %>%  
+  kable() %>% kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  collapse_rows(columns = 1, valign = "top") %>%
+  row_spec(0, background = "#778bd9", color = "white")
+```
+
+```{r fig.width=12, message=FALSE, warning=FALSE}
+p10$perc_acerto
+p10$barras + p10$matriz
+```
+
+Probabilidades da resposta pertencer a categoria predita nos casos em que houve acerto.
+
+```{r warning=F, message = F, fig.width=12}
+probabilidades_cluster(10, centroides, alunos) %>% 
+  ggplot(aes(x = Prob_predito, y = ..count../sum(..count..), fill = Comp)) + 
+  geom_histogram(color = "white") + 
+  facet_wrap(vars(Comp), nrow = 2) +
+  xlim(0, 1.1) +
+  labs(y = "") + theme(legend.position = "none")
+```
+
+## Pergunta 11
+
+```{r echo=FALSE, fig.width=12, message=FALSE, warning=FALSE, results='asis'}
+p11 <- conglomerado_pergunta(11, centroides, alunos)
+ultima_col11 <- p11$banco %>% group_by(predito) %>% count() %>% rename(Predito = n)
+
+respostas %>% filter(pergunta_id == 11) %>% 
+  group_by(Pergunta,`Nível da rubrica`) %>% 
+  count() %>% 
+  left_join(ultima_col11 %>% mutate(predito = as.character(predito)), 
+            by = c("Nível da rubrica" = "predito")) %>% 
+  kable() %>% kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  collapse_rows(columns = 1, valign = "top") %>%
+  row_spec(0, background = "#778bd9", color = "white")
+```
+
+```{r fig.width=12, message=FALSE, warning=FALSE, results='asis'}
+p11$perc_acerto
+p11$barras + p11$matriz 
+```
+
+Probabilidades da resposta pertencer a categoria predita nos casos em que houve acerto.
+
+```{r warning=F, message = F, fig.width=12}
+probabilidades_cluster(11, centroides, alunos) %>% 
+  ggplot(aes(x = Prob_predito, y = ..count../sum(..count..), fill = Comp)) + 
+  geom_histogram(color = "white") + 
+  facet_wrap(vars(Comp), nrow = 2) +
+  xlim(0, 1.1) +
+  labs(y = "") + theme(legend.position = "none")
+```
+
+
+## Pergunta 12
+
+```{r echo=FALSE, fig.width=12, message=FALSE, warning=FALSE}
+p12 <- conglomerado_pergunta(12, centroides, alunos %>% filter(`Nível da rubrica` != 1))
+ultima_col12 <- p12$banco %>% group_by(predito) %>% count() %>% rename(Predito = n)
+
+respostas %>% filter(pergunta_id == 12) %>% 
+  group_by(Pergunta,`Nível da rubrica`) %>% 
+  count() %>% 
+  left_join(ultima_col12 %>% mutate(predito = as.character(predito)), 
+            by = c("Nível da rubrica" = "predito")) %>% 
+  kable() %>% kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  collapse_rows(columns = 1, valign = "top") %>%
+  row_spec(0, background = "#778bd9", color = "white")
+```
+
+```{r fig.width=12, message=FALSE, warning=FALSE, results='asis'}
+p12$perc_acerto
+p12$barras + p12$matriz 
+```
+
+Probabilidades da resposta pertencer a categoria predita nos casos em que houve acerto.
+
+```{r warning=F, message = F, fig.width=12}
+probabilidades_cluster(12, centroides,
+                       alunos %>% filter(`Nível da rubrica` != 1)) %>% 
+  ggplot(aes(x = Prob_predito, y = ..count../sum(..count..), fill = Comp)) + 
+  geom_histogram(color = "white") + 
+  facet_wrap(vars(Comp), nrow = 2) +
+  xlim(0, 1.1) +
+  labs(y = "") + theme(legend.position = "none")
+```
+
+
+## Pergunta 13
+
+```{r echo=FALSE, warning=F, message = F, fig.width=12}
+p13 <- conglomerado_pergunta(13, centroides, alunos)
+ultima_col13 <- p13$banco %>% group_by(predito) %>% count() %>% rename(Predito = n)
+
+respostas %>% filter(pergunta_id == 13) %>% 
+  group_by(Pergunta,`Nível da rubrica`) %>% 
+  count() %>% 
+  left_join(ultima_col13 %>% mutate(predito = as.character(predito)), 
+            by = c("Nível da rubrica" = "predito")) %>%  
+  kable() %>% kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  collapse_rows(columns = 1, valign = "top") %>%
+  row_spec(0, background = "#778bd9", color = "white")
+```
+
+```{r warning=F, message = F, fig.width=12, results='asis'}
+p13$perc_acerto
+p13$barras + p13$matriz 
+```
+
+Probabilidades da resposta pertencer a categoria predita nos casos em que houve acerto.
+
+```{r warning=F, message = F, fig.width=12}
+probabilidades_cluster(13, centroides, alunos) %>% 
+  ggplot(aes(x = Prob_predito, y = ..count../sum(..count..), fill = Comp)) + 
+  geom_histogram(color = "white") + 
+  facet_wrap(vars(Comp), nrow = 2) +
+  xlim(0, 1.1) +
+  labs(y = "") + theme(legend.position = "none")
+```
+
+## Pergunta 14
+
+```{r echo=FALSE, fig.width=12, message=FALSE, warning=FALSE}
+p14 <- conglomerado_pergunta(14, centroides, alunos)
+ultima_col14 <- p14$banco %>% group_by(predito) %>% count() %>% rename(Predito = n)
+
+respostas %>% filter(pergunta_id == 14) %>% 
+  group_by(Pergunta,`Nível da rubrica`) %>% 
+  count() %>% 
+  left_join(ultima_col14 %>% mutate(predito = as.character(predito)), 
+            by = c("Nível da rubrica" = "predito")) %>%  
+  kable() %>% kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  collapse_rows(columns = 1, valign = "top") %>%
+  row_spec(0, background = "#778bd9", color = "white")
+```
+
+```{r fig.width=12, message=FALSE, warning=FALSE, results='asis'}
+p14$perc_acerto
+p14$barras + p14$matriz 
+```
+
+Probabilidades da resposta pertencer a categoria predita nos casos em que houve acerto.
+
+```{r warning=F, message = F, fig.width=12}
+probabilidades_cluster(14, centroides, alunos) %>% 
+  ggplot(aes(x = Prob_predito, y = ..count../sum(..count..), fill = Comp)) + 
+  geom_histogram(color = "white") + 
+  facet_wrap(vars(Comp), nrow = 2) +
+  xlim(0, 1.1) +
+  labs(y = "") + theme(legend.position = "none")
+```
+
+## Pergunta 15
+
+```{r echo=FALSE, fig.width=12, message=FALSE, warning=FALSE}
+p15 <- conglomerado_pergunta(15, centroides, alunos)
+ultima_col15 <- p15$banco %>% group_by(predito) %>% count() %>% rename(Predito = n)
+
+respostas %>% filter(pergunta_id == 15) %>% 
+  group_by(Pergunta,`Nível da rubrica`) %>% 
+  count() %>% 
+  left_join(ultima_col15 %>% mutate(predito = as.character(predito)), 
+            by = c("Nível da rubrica" = "predito")) %>% 
+  kable() %>% kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  collapse_rows(columns = 1, valign = "top") %>%
+  row_spec(0, background = "#778bd9", color = "white")
+```
+
+```{r fig.width=12, message=FALSE, warning=FALSE, results='asis'}
+p15$perc_acerto
+p15$barras + p15$matriz 
+```
+
+Probabilidades da resposta pertencer a categoria predita nos casos em que houve acerto.
+
+```{r warning=F, message = F, fig.width=12}
+probabilidades_cluster(15, centroides, alunos) %>% 
+  ggplot(aes(x = Prob_predito, y = ..count../sum(..count..), fill = Comp)) + 
+  geom_histogram(color = "white") + 
+  facet_wrap(vars(Comp), nrow = 2) +
+  xlim(0, 1.1) +
+  labs(y = "") + theme(legend.position = "none")
+```
+
+## Pergunta 16
+
+```{r echo=FALSE, fig.width=12, message=FALSE, warning=FALSE}
+p16 <- conglomerado_pergunta(16, centroides, alunos %>% filter(`Nível da rubrica` != 2))
+ultima_col16 <- p16$banco %>% group_by(predito) %>% count() %>% rename(Predito = n)
+
+respostas %>% filter(pergunta_id == 16) %>% 
+  group_by(Pergunta,`Nível da rubrica`) %>% 
+  count() %>% 
+  left_join(ultima_col16 %>% mutate(predito = as.character(predito)), 
+            by = c("Nível da rubrica" = "predito")) %>% 
+  kable() %>% kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  collapse_rows(columns = 1, valign = "top") %>%
+  row_spec(0, background = "#778bd9", color = "white")
+```
+
+```{r fig.width=12, message=FALSE, warning=FALSE, results='asis'}
+p16$perc_acerto
+p16$barras + p16$matriz 
+```
+
+Probabilidades da resposta pertencer a categoria predita nos casos em que houve acerto.
+
+```{r warning=F, message = F, fig.width=12}
+probabilidades_cluster(16, centroides,
+                       alunos %>% filter(`Nível da rubrica` != 2)) %>% 
+  ggplot(aes(x = Prob_predito, y = ..count../sum(..count..), fill = Comp)) + 
+  geom_histogram(color = "white") + 
+  facet_wrap(vars(Comp), nrow = 2) +
+  xlim(0, 1.1) +
+  labs(y = "") + theme(legend.position = "none")
+```
+
+## Pergunta 17
+
+```{r echo=FALSE, fig.width=12, message=FALSE, warning=FALSE}
+p17 <- conglomerado_pergunta(17, centroides, alunos)
+ultima_col17 <- p17$banco %>% group_by(predito) %>% count() %>% rename(Predito = n)
+
+respostas %>% filter(pergunta_id == 17) %>% 
+  group_by(Pergunta,`Nível da rubrica`) %>% 
+  count() %>% 
+  left_join(ultima_col17 %>% mutate(predito = as.character(predito)), 
+            by = c("Nível da rubrica" = "predito")) %>% 
+  kable() %>% kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  collapse_rows(columns = 1, valign = "top") %>%
+  row_spec(0, background = "#778bd9", color = "white")
+```
+
+```{r fig.width=12, message=FALSE, warning=FALSE, results='asis'}
+p17$perc_acerto
+p17$barras + p17$matriz 
+```
+
+Probabilidades da resposta pertencer a categoria predita nos casos em que houve acerto.
+
+```{r warning=F, message = F, fig.width=12}
+probabilidades_cluster(17, centroides, alunos) %>% 
+  ggplot(aes(x = Prob_predito, y = ..count../sum(..count..), fill = Comp)) + 
+  geom_histogram(color = "white") + 
+  facet_wrap(vars(Comp), nrow = 2) +
+  xlim(0, 1.1) +
+  labs(y = "") + theme(legend.position = "none")
+```
+
+
+## Pergunta 18
+
+```{r echo=FALSE, fig.width=12, message=FALSE, warning=FALSE}
+p18 <- conglomerado_pergunta(18, centroides, alunos)
+ultima_col18 <- p18$banco %>% group_by(predito) %>% count() %>% rename(Predito = n)
+
+respostas %>% filter(pergunta_id == 18) %>% 
+  group_by(Pergunta,`Nível da rubrica`) %>% 
+  count() %>% 
+  left_join(ultima_col18 %>% mutate(predito = as.character(predito)), 
+            by = c("Nível da rubrica" = "predito")) %>%  
+  kable() %>% kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  collapse_rows(columns = 1, valign = "top") %>%
+  row_spec(0, background = "#778bd9", color = "white")
+```
+
+```{r warning=F, message = F, fig.width=12, results='asis'}
+p18$perc_acerto
+p18$barras + p18$matriz 
+```
+
+Probabilidades da resposta pertencer a categoria predita nos casos em que houve acerto.
+
+```{r warning=F, message = F, fig.width=12}
+probabilidades_cluster(18, centroides, alunos) %>%
+  ggplot(aes(x = Prob_predito, y = ..count../sum(..count..), fill = Comp)) +
+  geom_histogram(color = "white") +
+  facet_wrap(vars(Comp), nrow = 2) +
+  xlim(0, 1.1) +
+  labs(y = "") + theme(legend.position = "none")
+```
+
+## Pergunta 19
+
+```{r echo=FALSE, fig.width=12, message=FALSE, warning=FALSE}
+p19 <- conglomerado_pergunta(19, centroides, alunos)
+ultima_col19 <- p19$banco %>% group_by(predito) %>% count() %>% rename(Predito = n)
+
+respostas %>% filter(pergunta_id == 19) %>% 
+  group_by(Pergunta,`Nível da rubrica`) %>% 
+  count() %>% 
+  left_join(ultima_col19 %>% mutate(predito = as.character(predito)), 
+            by = c("Nível da rubrica" = "predito")) %>%  
+  kable() %>% kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  collapse_rows(columns = 1, valign = "top") %>%
+  row_spec(0, background = "#778bd9", color = "white")
+```
+
+```{r warning=F, message = F, fig.width=12, results='asis'}
+p19$perc_acerto
+p19$barras + p19$matriz 
+```
+
+Probabilidades da resposta pertencer a categoria predita nos casos em que houve acerto.
+
+```{r warning=F, message = F, fig.width=12}
+probabilidades_cluster(19, centroides, alunos) %>% 
+  ggplot(aes(x = Prob_predito, y = ..count../sum(..count..), fill = Comp)) + 
+  geom_histogram(color = "white") + 
+  facet_wrap(vars(Comp), nrow = 2) +
+  xlim(0,1.1) +
+  labs(y = "") + theme(legend.position = "none")
+``` 
+
+## Pergunta 20
+
+```{r echo=FALSE, fig.width=12, message=FALSE, warning=FALSE}
+p20 <- conglomerado_pergunta(20, centroides, alunos)
+ultima_col20 <- p20$banco %>% group_by(predito) %>% count() %>% rename(Predito = n)
+
+respostas %>% filter(pergunta_id == 20) %>% 
+  group_by(Pergunta,`Nível da rubrica`) %>% 
+  count() %>% 
+  left_join(ultima_col20 %>% mutate(predito = as.character(predito)), 
+            by = c("Nível da rubrica" = "predito")) %>%  
+  kable() %>% kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  collapse_rows(columns = 1, valign = "top") %>%
+  row_spec(0, background = "#778bd9", color = "white")
+```
+
+```{r warning=F, message = F, fig.width=12, results='asis'}
+p20$perc_acerto
+p20$barras + p20$matriz 
+```
+
+Probabilidades da resposta pertencer a categoria predita nos casos em que houve acerto.
+
+```{r warning=F, message = F, fig.width=12}
+probabilidades_cluster(20, centroides, alunos) %>% 
+  ggplot(aes(x = Prob_predito, y = ..count../sum(..count..), fill = Comp)) + 
+  geom_histogram(color = "white") + 
+  facet_wrap(vars(Comp), nrow = 2) +
+  xlim(0, 1.1) +
+  labs(y = "") + theme(legend.position = "none")
+```
+
+## Pergunta 21
+
+```{r warning=F, message = F, fig.width=12}
+p21 <- conglomerado_pergunta(21, centroides, alunos)
+ultima_col21 <- p21$banco %>% group_by(predito) %>% count() %>% rename(Predito = n)
+
+respostas %>% filter(pergunta_id == 21) %>% 
+  group_by(Pergunta,`Nível da rubrica`) %>% 
+  count() %>% 
+  left_join(ultima_col21 %>% mutate(predito = as.character(predito)), 
+            by = c("Nível da rubrica" = "predito")) %>%  
+  kable() %>% kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  collapse_rows(columns = 1, valign = "top") %>%
+  row_spec(0, background = "#778bd9", color = "white")
+```
+
+
+```{r warning=F, message = F, fig.width=12, results='asis'}
+p21$perc_acerto
+p21$barras + p21$matriz 
+```
+
+Probabilidades da resposta pertencer a categoria predita nos casos em que houve acerto.
+
+```{r warning=F, message = F, fig.width=12}
+probabilidades_cluster(21, centroides, alunos) %>% 
+  ggplot(aes(x = Prob_predito, y = ..count../sum(..count..), fill = Comp)) + 
+  geom_histogram(color = "white") + 
+  facet_wrap(vars(Comp), nrow = 2) +
+  xlim(0, 1.1) +
+  labs(y = "") + theme(legend.position = "none")
+```
+
+# Resumo de todas as Perguntas
+
+- **Pergunta 4:** 3 respostas do nível 1 e 133 respostas no nível 3;
+
+- **Pergunta 6:** 10 respostas do nível 1, 1 resposta no nível 2 e 125 respostas no nível 3;
+
+- **Pergunta 9:** 13 respostas do nível 1, 4 resposta no nível 2 e 119 respostas no nível 3;
+
+
+
+```{r echo=FALSE, fig.width=12, message=FALSE, warning=FALSE}
+nivel_dificuldade <- readRDS("dados/nivel_dificuldade.rds") %>% 
+  mutate(pergunta_id = paste("Pergunta", pergunta_id),
+         `Nível de dificuldade` = factor(`Nível de dificuldade`, 
+                                         levels = c("Fácil", "Médio", "Difícil"))) %>% 
+  rename(pergunta = pergunta_id)
+
+data.frame(pergunta = paste("Pergunta", 1:21),
+           perc_acerto = c(p1$perc_acerto_n, p2$perc_acerto_n, p3$perc_acerto_n,
+                           p4$perc_acerto_n, p5$perc_acerto_n, p6$perc_acerto_n,
+                           p7$perc_acerto_n, p8$perc_acerto_n, p9$perc_acerto_n,
+                           p10$perc_acerto_n, p11$perc_acerto_n, p12$perc_acerto_n,
+                           p13$perc_acerto_n, p14$perc_acerto_n, p15$perc_acerto_n,
+                           p16$perc_acerto_n, p17$perc_acerto_n, p18$perc_acerto_n,
+                           p19$perc_acerto_n, p20$perc_acerto_n, p21$perc_acerto_n)) %>% 
+  left_join(nivel_dificuldade) %>% 
+  mutate(pergunta = fct_reorder(pergunta, perc_acerto)) %>% 
+  arrange(pergunta) %>% 
+  ggplot(aes(y = perc_acerto, x = pergunta, fill = `Nível de dificuldade`)) + geom_col() + coord_flip() +
+  labs(x = "", y = "Proporção de Acerto")
+```
+
+# Palavras fora do Vocabulário 
+
+Entre os alunos
+
+```{r , results='asis'}
+respostas %>% 
+  mutate(Resposta = tolower(Resposta) %>% # Todas as letras em minúsculo
+           str_replace_all("[.,!?:;]", " ")) %>%  # Remove pontuação
+  unnest_tokens(word, Resposta) %>% 
+  drop_na() %>% 
+  mutate(word = map(word, transforma_num) %>% unlist()) %>%
+  separate_rows(word, sep = " ") %>% 
+  filter(!word %in% rownames(cbow_s50)) %>% 
+  pull(word) %>% 
+  unique() %>% str_flatten(", ")
+```
+
+**Verificando os erros mais comuns entre os alunos**
+
+```{r warning=F, message=F}
+respostas %>% 
+  mutate(Resposta = tolower(Resposta) %>% # Todas as letras em minúsculo
+           str_replace_all("[.,!?:;]", " ")) %>%  # Remove pontuação
+  unnest_tokens(word, Resposta) %>% 
+  drop_na() %>% 
+  mutate(word = map(word, transforma_num) %>% unlist()) %>%
+  separate_rows(word, sep = " ") %>% 
+  filter(!word %in% rownames(cbow_s50)) %>% 
+  group_by(word) %>% count() %>% ungroup() %>% 
+  slice_max(n = 30, order_by = n) %>% 
+  ggplot(aes(x = fct_reorder(as.factor(word), n), y = n)) + 
+  geom_col() + coord_flip()+
+  labs(x = "", y = "") 
+  
+```
+
+**Verificando os alunos que cometeram mais erros**
+
+```{r warning=F, message=F, fig.width=12}
+respostas %>% 
+  mutate(Resposta = tolower(Resposta) %>% # Todas as letras em minúsculo
+           str_replace_all("[.,!?:;]", " ")) %>%  # Remove pontuação
+  unnest_tokens(word, Resposta) %>% 
+  drop_na() %>% 
+  mutate(word = map(word, transforma_num) %>% unlist()) %>%
+  separate_rows(word, sep = " ") %>% 
+  filter(!word %in% rownames(cbow_s50)) %>% 
+  filter(!str_detect(word, "[012345]")) %>% 
+  group_by(id) %>% 
+  count() %>% ungroup() %>% 
+  slice_max(n = 30, order_by = n) %>% 
+  ggplot(aes(x = fct_reorder(as.factor(id), desc(n)), y = n)) + 
+  geom_col() + labs(x = "", y = "")
+```
+
+# Separando Bancos de Dados
+
+Separando os erros cometidos por alunos e perguntas e adicionando no banco de dados
+
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE, fig.width=12}
+erros <- respostas %>% 
+  mutate(Resposta = tolower(Resposta) %>% # Todas as letras em minúsculo
+           str_replace_all("[.,!?:;]", " ")) %>%  # Remove pontuação
+  unnest_tokens(word, Resposta) %>% 
+  filter(!word %in% rownames(cbow_s50)) %>% 
+  filter(!(str_detect(word, "[0123456789]"))) %>% 
+  group_by(id, Pergunta) %>% 
+  summarise(erros = str_flatten(word, ", "))
+
+respostas <- respostas %>% 
+  left_join(erros)
+
+conferencia <- respostas %>% filter(!is.na(erros))
+```
+
+Com as classificações de diferentes perguntas
+
+```{r eval=FALSE, include=FALSE}
+p1 <- conglomerado_pergunta(1, centroides, alunos %>% filter(`Nível da rubrica` != 4))
+p2 <- conglomerado_pergunta(2, centroides, alunos %>% filter(`Nível da rubrica` != 1))
+p3 <- conglomerado_pergunta(3, centroides, alunos)
+p4 <- conglomerado_pergunta(4, centroides, alunos %>% filter(`Nível da rubrica` != 1))
+p5 <- conglomerado_pergunta(5, centroides, alunos)
+p6 <- conglomerado_pergunta(6, centroides, alunos %>% filter(`Nível da rubrica` != 2))
+p7 <- conglomerado_pergunta(7, centroides, alunos)
+p8 <- conglomerado_pergunta(8, centroides, alunos)
+p9 <- conglomerado_pergunta(9, centroides, alunos %>% filter(`Nível da rubrica` != 2))
+p10 <- conglomerado_pergunta(10, centroides, alunos)
+p11 <- conglomerado_pergunta(11, centroides, alunos %>% filter(`Nível da rubrica` != 2))
+p12 <- conglomerado_pergunta(12, centroides, alunos %>% filter(`Nível da rubrica` != 1))
+p13 <- conglomerado_pergunta(13, centroides, alunos)
+p14 <- conglomerado_pergunta(14, centroides, alunos)
+p15 <- conglomerado_pergunta(15, centroides, alunos)
+p16 <- conglomerado_pergunta(16, centroides, alunos %>% filter(`Nível da rubrica` != 1))
+p17 <- conglomerado_pergunta(17, centroides, alunos)
+p18 <- conglomerado_pergunta(18, centroides, alunos)
+p19 <- conglomerado_pergunta(19, centroides, alunos)
+p20 <- conglomerado_pergunta(20, centroides, alunos)
+p21 <- conglomerado_pergunta(21, centroides, alunos)
+
+banco_final <- rbind(p1$banco, p2$banco, p3$banco, p4$banco, p6$banco, p7$banco, 
+                     p8$banco, p9$banco, p10$banco, p11$banco, p12$banco,
+                     p13$banco, p14$banco, p15$banco, p16$banco, p17$banco, 
+                     p18$banco, p19$banco, p20$banco, p21$banco) %>% 
+  select(c(1,2,3,54))
+
+banco_final <- respostas %>%
+  right_join(alunos) %>% select(1:8) %>% 
+  left_join(banco_final) %>% 
+  mutate(predito = case_when(
+    is.na(predito) ~ "Não houve respostas suficientes.",
+    TRUE ~ as.character(predito)
+  ))
+
+write.csv2(banco_final, "classificacao_respostas_alunos_ze_gotinha.csv")
+```
+
+
+<!-- # Piores respostas -->
+
+<!-- ```{r} -->
+<!-- # respostas %>% filter(Pergunta == "X1  Quem é Zé Gotinha ") %>%  -->
+<!-- #   .[c(48, 49, 60, 63, 71, 74, 75, 76, 77, 82, 140)-7, c(3, 5)] -->
+<!-- ``` -->
+
